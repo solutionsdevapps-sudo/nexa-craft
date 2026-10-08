@@ -81,17 +81,31 @@
     return e;
   }
 
-  function envoyer(fonction, args, code, delai) {
+  function envoyer(fonction, args, code, delai, methode) {
 
     var controle = new AbortController();
     var minuterie = setTimeout(function() { controle.abort(); }, delai);
+    var requete;
 
-    return fetch(URL_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ code: code, fonction: fonction, args: args }),
-      signal: controle.signal
-    })
+    if (methode === 'GET') {
+      
+      requete = fetch(URL_API +
+        '?fonction=' + encodeURIComponent(fonction) +
+        '&args=' + encodeURIComponent(JSON.stringify(args)) +
+        '&code=' + encodeURIComponent(code), {
+        method: 'GET',
+        signal: controle.signal
+      });
+    } else {
+      requete = fetch(URL_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ code: code, fonction: fonction, args: args }),
+        signal: controle.signal
+      });
+    }
+
+    return requete
     .then(function(reponse) { return reponse.text(); })
     .then(function(texte) {
 
@@ -134,7 +148,8 @@
     for (var essai = 1; ; essai++) {
 
       try {
-        donnees = await limiter(function() { return envoyer(fonction, args, code, delai); });
+        var methode = (lecture && essai % 2 === 1) ? 'GET' : 'POST'; 
+        donnees = await limiter(function() { return envoyer(fonction, args, code, delai, methode); });
         break;
       } catch (e) {
 
