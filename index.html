@@ -92,14 +92,17 @@
       requete = fetch(URL_API +
         '?fonction=' + encodeURIComponent(fonction) +
         '&args=' + encodeURIComponent(JSON.stringify(args)) +
-        '&code=' + encodeURIComponent(code), {
+        '&code=' + encodeURIComponent(code) +
+        '&t=' + Date.now() + Math.floor(Math.random() * 1000), {
         method: 'GET',
+        cache: 'no-store',          
         signal: controle.signal
       });
     } else {
       requete = fetch(URL_API, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        cache: 'no-store',
         body: JSON.stringify({ code: code, fonction: fonction, args: args }),
         signal: controle.signal
       });
