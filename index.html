@@ -16,6 +16,20 @@
 
   var URL_API = 'https://script.google.com/macros/s/AKfycby8aIwjKtRvc4Ty4lySqN9tldR7YlbgA2jYfFYAZZ6e6VdINuKoWQ_OO7KsyaPj2cp4/exec';
 
+  var MAX_SIMULTANEES = 4;
+  var ESSAIS_LECTURE = 3;            
+  var PAUSES = [800, 1600];          
+  var DELAI_LECTURE = 30000;         
+  var DELAI_ECRITURE = 60000;        
+
+  var actives = 0;
+  var file = [];
+  var enCours = {};
+
+
+  
+  
+  
 
   function codeAcces() {
 
@@ -30,28 +44,110 @@
   }
 
 
+  
+  
+  
+
+  function limiter(tache) {
+
+    return new Promise(function(resolve, reject) {
+      file.push({ tache: tache, resolve: resolve, reject: reject });
+      suivante();
+    });
+  }
+
+  function suivante() {
+
+    while (actives < MAX_SIMULTANEES && file.length) {
+
+      var element = file.shift();
+      actives++;
+
+      Promise.resolve()
+        .then(element.tache)
+        .then(element.resolve, element.reject)
+        .then(function() { actives--; suivante(); });
+    }
+  }
+
+
+  
+  
+  
+
+  function erreurTechnique(message) {
+    var e = new Error(message);
+    e.technique = true;
+    return e;
+  }
+
+  function envoyer(fonction, args, code, delai) {
+
+    var controle = new AbortController();
+    var minuterie = setTimeout(function() { controle.abort(); }, delai);
+
+    return fetch(URL_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ code: code, fonction: fonction, args: args }),
+      signal: controle.signal
+    })
+    .then(function(reponse) { return reponse.text(); })
+    .then(function(texte) {
+
+      clearTimeout(minuterie);
+
+      try {
+        return JSON.parse(texte);
+      } catch (e) {
+        throw erreurTechnique('Réponse inattendue du serveur.');
+      }
+
+    }, function() {
+
+      clearTimeout(minuterie);
+      throw erreurTechnique('Connexion impossible.');
+    });
+  }
+
+  function pause(ms) {
+    return new Promise(function(resolve) { setTimeout(resolve, ms); });
+  }
+
+  function estLecture(fonction) {
+    return /^get/.test(fonction);
+  }
+
+
+  
+  
+  
+
   async function appeler(fonction, args, dejaEssaye) {
 
+    var lecture = estLecture(fonction);
+    var essaisMax = lecture ? ESSAIS_LECTURE : 1;
+    var delai = lecture ? DELAI_LECTURE : DELAI_ECRITURE;
     var code = codeAcces();
-    var texte;
-
-    try {
-      var reponse = await fetch(URL_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ code: code, fonction: fonction, args: args })
-      });
-      texte = await reponse.text();
-    } catch (e) {
-      throw new Error('Connexion impossible. Vérifie ta connexion internet.');
-    }
-
     var donnees;
 
-    try {
-      donnees = JSON.parse(texte);
-    } catch (e) {
-      throw new Error("Réponse inattendue du serveur. Vérifie que le déploiement est réglé sur « Tout le monde ».");
+    for (var essai = 1; ; essai++) {
+
+      try {
+        donnees = await limiter(function() { return envoyer(fonction, args, code, delai); });
+        break;
+      } catch (e) {
+
+        if (!e.technique) throw e;
+
+        if (essai >= essaisMax) {
+          throw new Error(lecture
+            ? e.message + ' Vérifie ta connexion internet, puis recharge la page.'
+            : e.message + " L'enregistrement a peut-être été pris en compte : vérifie dans la liste avant de recommencer.");
+        }
+
+        await pause(PAUSES[essai - 1] || 1600);
+      }
     }
 
     if (donnees.ok) return donnees.resultat;
@@ -69,6 +165,33 @@
     throw new Error(donnees.erreur || 'Erreur inconnue');
   }
 
+
+  
+  function copier(valeur) {
+    return valeur === undefined ? valeur : JSON.parse(JSON.stringify(valeur));
+  }
+
+  function appelerPartage(fonction, args) {
+
+    if (!estLecture(fonction)) return appeler(fonction, args);
+
+    var cle = fonction + '|' + JSON.stringify(args);
+
+    if (!enCours[cle]) {
+
+      enCours[cle] = appeler(fonction, args).then(
+        function(resultat) { delete enCours[cle]; return resultat; },
+        function(erreur) { delete enCours[cle]; throw erreur; }
+      );
+    }
+
+    return enCours[cle].then(copier);
+  }
+
+
+  
+  
+  
 
   function creerRunner(onSucces, onEchec) {
 
@@ -90,7 +213,7 @@
 
           var args = Array.prototype.slice.call(arguments);
 
-          appeler(nom, args).then(
+          appelerPartage(nom, args).then(
             function(resultat) {
               try { if (onSucces) onSucces(resultat); }
               catch (e) { console.error(e); }
@@ -4713,6 +4836,18 @@ function majListeCategoriesCatalogue() {
 
 
 <div class="form-group">
+  <label>Réf. couleur (nom sur la boîte)</label>
+  <input id="filRefCouleur" type="text" placeholder="Ex : Oak">
+</div>
+
+
+<div class="form-group form-full">
+  <label>Code-barres</label>
+  <input id="filCodeBarre" type="text" inputmode="numeric" placeholder="Chiffres sous le code-barres de la bobine">
+</div>
+
+
+<div class="form-group">
   <label>Poids bobine (g) *</label>
   <input id="filPoids" type="number" min="1" step="1" value="1000" oninput="calculerPrixFilament()">
 </div>
@@ -5234,7 +5369,7 @@ function filtrerFilaments() {
     if (matiere && f.Matiere !== matiere) return false;
     if (!texte) return true;
 
-    return [f.Reference, f.Matiere, f.Marque, f.Gamme, f.Couleur, f.Fournisseur]
+    return [f.Reference, f.Matiere, f.Marque, f.Gamme, f.Couleur, f.RefCouleur, f.CodeBarre, f.Fournisseur]
       .join(' ')
       .toLowerCase()
       .includes(texte);
@@ -5279,7 +5414,11 @@ function carteFilament(f) {
         <span>${formatEuro(nombre(f.PrixParGramme) * 1000)} / kg</span>
       </div>
 
-      <div class="filament-ref">${echapper(f.Reference)}</div>
+      <div class="filament-ref">
+        ${echapper(f.Reference)}
+        ${f.RefCouleur ? '<br>Réf. couleur : <strong>' + echapper(f.RefCouleur) + '</strong>' : ''}
+        ${f.CodeBarre ? '<br>Code-barres : <strong>' + echapper(f.CodeBarre) + '</strong>' : ''}
+      </div>
 
     </div>`;
 }
@@ -5355,6 +5494,8 @@ function remplirFormulaireFilament(id) {
   document.getElementById('filStock').value = nombre(f.StockG);
   document.getElementById('filStockMinimum').value = nombre(f.StockMinimumG);
   document.getElementById('filFournisseur').value = f.Fournisseur || '';
+  document.getElementById('filRefCouleur').value = f.RefCouleur || '';
+  document.getElementById('filCodeBarre').value = f.CodeBarre || '';
 
   ecrire('modalFilamentTitre', 'Modifier le filament');
   ecrire('modalFilamentSousTitre', 'Référence : ' + (f.Reference || '—'));
@@ -5445,6 +5586,8 @@ function enregistrerFilament() {
     stockMinimumG: Number(valeur('filStockMinimum')),
     fournisseur:   valeur('filFournisseur'),
     dateAchat:     valeur('filDateAchat'),
+    refCouleur:    valeur('filRefCouleur'),
+    codeBarre:     valeur('filCodeBarre'),
     actif:         true
   };
 
@@ -5501,6 +5644,8 @@ function reinitialiserFormulaireFilament() {
   document.getElementById('filStock').value = 1000;
   document.getElementById('filStockMinimum').value = 200;
   document.getElementById('filFournisseur').value = '';
+  document.getElementById('filRefCouleur').value = '';
+  document.getElementById('filCodeBarre').value = '';
 
   ecrire('modalFilamentTitre', 'Nouveau filament');
   ecrire('modalFilamentSousTitre', 'Ajouter une bobine au stock');
