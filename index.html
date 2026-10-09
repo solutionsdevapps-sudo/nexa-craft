@@ -5405,6 +5405,18 @@ function filtrerFilaments() {
     return;
   }
 
+    
+  const luminance = function(code) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(code));
+    if (!m) return 1000;
+    return 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16);
+  };
+
+  resultats.sort(function(a, b) {
+    return luminance(a.CodeCouleur) - luminance(b.CodeCouleur) ||
+      String(a.Couleur).localeCompare(String(b.Couleur), 'fr');
+  });
+
   liste.innerHTML = resultats.map(carteFilament).join('');
 }
 
