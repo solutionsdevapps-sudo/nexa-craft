@@ -4871,8 +4871,14 @@ function majListeCategoriesCatalogue() {
 </div>
 
 
+<div class="form-group" id="filNbBobinesGroupe">
+  <label>Nombre de bobines</label>
+  <input id="filNbBobines" type="number" min="1" max="20" step="1" value="1">
+</div>
+
+
 <div class="form-group">
-  <label>Prix payé (€) *</label>
+  <label>Prix payé par bobine (€) *</label>
   <input id="filPrix" type="number" min="0" step="0.01" placeholder="19.99" oninput="calculerPrixFilament()">
 </div>
 
@@ -5515,6 +5521,8 @@ function remplirFormulaireFilament(id) {
   document.getElementById('filRefCouleur').value = f.RefCouleur || '';
   document.getElementById('filCodeBarre').value = f.CodeBarre || '';
 
+  document.getElementById('filNbBobinesGroupe').style.display = 'none';
+
   ecrire('modalFilamentTitre', 'Modifier le filament');
   ecrire('modalFilamentSousTitre', 'Référence : ' + (f.Reference || '—'));
   document.getElementById('btnEnregistrerFilament').textContent = 'Enregistrer les modifications';
@@ -5644,12 +5652,63 @@ function enregistrerFilament() {
     filament.id = id;
     google.script.run.withSuccessHandler(surSucces).withFailureHandler(surEchec).modifierFilament(filament);
   } else {
-    google.script.run.withSuccessHandler(surSucces).withFailureHandler(surEchec).ajouterFilament(filament);
+    const nombreBobines = Math.max(1, Math.min(20, parseInt(valeur('filNbBobines'), 10) || 1));
+
+    if (nombreBobines === 1) {
+      google.script.run.withSuccessHandler(surSucces).withFailureHandler(surEchec).ajouterFilament(filament);
+    } else {
+      enregistrerPlusieursBobines_(filament, nombreBobines, btn);
+    }
   }
 }
 
 
+ 
+function enregistrerPlusieursBobines_(filament, total, btn) {
+
+  let faites = 0;
+
+  function suivante() {
+
+    if (faites >= total) {
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer le filament';
+      fermerModalFilament();
+      chargerFilaments();
+      return;
+    }
+
+    btn.textContent = 'Enregistrement ' + (faites + 1) + ' / ' + total + '...';
+
+    google.script.run
+
+      .withSuccessHandler(function() {
+        faites++;
+        suivante();
+      })
+
+      .withFailureHandler(function(erreur) {
+        btn.disabled = false;
+        btn.textContent = 'Enregistrer le filament';
+        chargerFilaments();
+        alert(
+          faites + ' bobine(s) sur ' + total + ' enregistrée(s).\n' +
+          'Erreur : ' + (erreur.message || erreur) + '\n' +
+          'Vérifie la liste avant de recommencer.'
+        );
+      })
+
+      .ajouterFilament(filament);
+  }
+
+  suivante();
+}
+
+
 function reinitialiserFormulaireFilament() {
+
+  document.getElementById('filNbBobines').value = 1;
+  document.getElementById('filNbBobinesGroupe').style.display = '';
 
   document.getElementById('filId').value = '';
   document.getElementById('filMatiere').value = 'PLA';
