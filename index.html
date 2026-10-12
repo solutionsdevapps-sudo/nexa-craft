@@ -7540,6 +7540,91 @@ function ajouterLigneImpression(detecte) {
 }
 
 
+// ============================================================
+
+
+
+function luminanceBobine_(code) {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(String(code));
+  if (!m) return 1000;
+  return 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16);
+}
+
+
+ 
+function construireChoixBobine(ligne) {
+
+  const select = ligne.querySelector('.imp-bobine');
+  const liste = ligne.querySelector('.bobine-liste');
+  if (!select || !liste) return;
+
+  const elements = Array.prototype.slice.call(select.options)
+    .filter(function(o) { return o.value; })
+    .map(function(o) {
+      const f = filamentsCache.find(function(x) { return String(x.ID) === String(o.value); }) || {};
+      return { id: o.value, texte: o.text, couleur: f.CodeCouleur, matiere: String(f.Matiere || '') };
+    });
+
+  
+  elements.sort(function(a, b) {
+    return a.matiere.localeCompare(b.matiere, 'fr') ||
+      luminanceBobine_(a.couleur) - luminanceBobine_(b.couleur) ||
+      a.texte.localeCompare(b.texte, 'fr');
+  });
+
+  liste.innerHTML = elements.map(function(e) {
+    return '<div class="bobine-item" data-id="' + echapper(e.id) + '" onclick="choisirBobine(this)">' +
+      '<span class="bobine-pastille" style="background:' + couleurSure(e.couleur) + '"></span>' +
+      '<span class="bobine-texte">' + echapper(e.texte) + '</span></div>';
+  }).join('') || '<div class="bobine-item">Aucune bobine en stock</div>';
+
+  majChoixBobine(select);
+}
+
+
+ 
+function majChoixBobine(select) {
+
+  const bouton = select.closest('.imp-ligne').querySelector('.bobine-bouton');
+  const f = filamentsCache.find(function(x) { return String(x.ID) === String(select.value); });
+
+  bouton.innerHTML = f
+    ? '<span class="bobine-pastille" style="background:' + couleurSure(f.CodeCouleur) + '"></span>' +
+      '<span class="bobine-texte">' + echapper(select.options[select.selectedIndex].text) + '</span>'
+    : '<span class="bobine-texte bobine-vide">Choisir une bobine...</span>';
+}
+
+
+function ouvrirChoixBobine(bouton) {
+
+  const bloc = bouton.closest('.bobine-choix');
+  const etaitOuvert = bloc.classList.contains('open');
+
+  document.querySelectorAll('.bobine-choix.open').forEach(function(b) { b.classList.remove('open'); });
+  if (!etaitOuvert) bloc.classList.add('open');
+}
+
+
+function choisirBobine(item) {
+
+  const ligne = item.closest('.imp-ligne');
+  const select = ligne.querySelector('.imp-bobine');
+
+  select.value = item.dataset.id || '';
+  select.dispatchEvent(new Event('change'));
+
+  ligne.querySelector('.bobine-choix').classList.remove('open');
+}
+
+
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.bobine-choix')) {
+    document.querySelectorAll('.bobine-choix.open').forEach(function(b) { b.classList.remove('open'); });
+  }
+});
+
+
 function optionsBobines(idChoisi) {
 
   if (!filamentsCache.length) {
@@ -7560,7 +7645,7 @@ function optionsBobines(idChoisi) {
 }
 
 
-/** Propose la bobine de même matière dont la couleur est la plus proche. */
+ 
 function trouverBobineProche(type, couleur) {
 
   const t = String(type || '').toUpperCase();
@@ -7569,7 +7654,7 @@ function trouverBobineProche(type, couleur) {
   let candidats = filamentsCache.filter(f => String(f.Matiere).toUpperCase() === t);
 
   if (!candidats.length) {
-    // Ex : "PLA-CF" -> bobines "PLA"
+    
     candidats = filamentsCache.filter(f =>
       f.Matiere && t.indexOf(String(f.Matiere).toUpperCase()) === 0
     );
@@ -7593,7 +7678,7 @@ function trouverBobineProche(type, couleur) {
     }
   });
 
-  // Couleur trop différente : on laisse choisir
+  
   return meilleur && distanceMin < 30000 ? meilleur.ID : '';
 }
 
@@ -7605,9 +7690,9 @@ function hexVersRgb(hex) {
 }
 
 
-// ============================================================
-// RÉSUMÉ (poids + coût) ET CONTRÔLE DU STOCK
-// ============================================================
+
+
+
 
 function majResumeImpression() {
 
@@ -7623,7 +7708,7 @@ function majResumeImpression() {
     totalG += grammes;
     if (bobine) cout += grammes * nombre(bobine.PrixParGramme);
 
-    // La pastille suit toujours la bobine réellement sélectionnée
+    
     ligne.querySelector('.imp-swatch').style.background =
       couleurSure(bobine ? bobine.CodeCouleur : '#cccccc');
 
@@ -7634,7 +7719,7 @@ function majResumeImpression() {
       : '';
   });
 
-  // ---------- Électricité + usure machine
+  
   const reglages = (typeof reglagesCache !== 'undefined') ? reglagesCache : { prixKWh: 0, imprimantes: [] };
   const imprimante = (reglages.imprimantes || []).find(i => String(i.ID) === valeur('impImprimante'));
 
@@ -7662,7 +7747,7 @@ function majResumeImpression() {
 }
 
 
-/** Remplit la liste des imprimantes (garde le choix en cours si possible). */
+ 
 function majSelectImprimantes() {
 
   const select = document.getElementById('impImprimante');
@@ -7683,7 +7768,7 @@ function majSelectImprimantes() {
 
 
 
-/** Remplit la liste des pièces du catalogue. Par défaut : créer une nouvelle pièce. */
+ 
 function majSelectPieces() {
 
   const select = document.getElementById('impPiece');
@@ -7706,7 +7791,7 @@ function majSelectPieces() {
 }
 
 
-/** Si le nom correspond exactement à une pièce existante, la propose automatiquement. */
+ 
 function tenterLiaisonPieceExistante() {
 
   const nom = valeur('impNom').trim().toLowerCase();
@@ -7719,7 +7804,7 @@ function tenterLiaisonPieceExistante() {
 }
 
 
-/** Quand on choisit une pièce, son nom (et son temps si connu) préremplissent le formulaire. */
+ 
 function appliquerPieceChoisie() {
 
   const piece = piecesCache.find(p => String(p.ID) === String(valeur('impPiece')));
@@ -7734,9 +7819,9 @@ function appliquerPieceChoisie() {
   majResumeImpression();
 }
 
-// ============================================================
-// ENREGISTREMENT
-// ============================================================
+
+
+
 
 function validerImpression() {
 
@@ -7812,13 +7897,13 @@ function validerImpression() {
 }
 
 
-// ============================================================
-// GLISSER-DÉPOSER
-// ============================================================
+
+
+
 
 document.addEventListener('DOMContentLoaded', function() {
 
-  // Évite que le navigateur ouvre le fichier si on le lâche à côté
+  
   ['dragover', 'drop'].forEach(ev =>
     window.addEventListener(ev, e => e.preventDefault())
   );
