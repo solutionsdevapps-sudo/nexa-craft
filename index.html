@@ -6998,6 +6998,76 @@ document.addEventListener('click', function(e) {
   color: var(--text);
 }
 
+.bobine-choix {
+  position: relative;
+}
+
+.bobine-bouton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: white;
+  color: var(--text);
+}
+
+.bobine-liste {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  max-height: 260px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(15, 20, 35, .18);
+}
+
+.bobine-choix.open .bobine-liste {
+  display: block;
+}
+
+.bobine-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bobine-item:hover {
+  background: var(--primary-soft);
+}
+
+.bobine-pastille {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.bobine-texte {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bobine-vide {
+  color: var(--muted);
+}
+
 .imp-poids {
   display: flex;
   align-items: center;
@@ -7443,9 +7513,13 @@ function ajouterLigneImpression(detecte) {
 
     <div class="imp-ligne-info">
       <small>${infoDetectee}</small>
-      <select class="imp-bobine" onchange="majResumeImpression()">
+      <select class="imp-bobine" style="display:none" onchange="majResumeImpression(); majChoixBobine(this)">
         ${optionsBobines(suggestion)}
       </select>
+      <div class="bobine-choix">
+        <button type="button" class="bobine-bouton" onclick="ouvrirChoixBobine(this)"></button>
+        <div class="bobine-liste"></div>
+      </div>
       <div class="imp-alerte-stock"></div>
     </div>
 
@@ -7461,6 +7535,7 @@ function ajouterLigneImpression(detecte) {
   `;
 
   conteneur.appendChild(ligne);
+  construireChoixBobine(ligne);
   majResumeImpression();
 }
 
@@ -7660,8 +7735,8 @@ function appliquerPieceChoisie() {
 }
 
 // ============================================================
-
-
+// ENREGISTREMENT
+// ============================================================
 
 function validerImpression() {
 
@@ -7737,13 +7812,13 @@ function validerImpression() {
 }
 
 
-
-
-
+// ============================================================
+// GLISSER-DÉPOSER
+// ============================================================
 
 document.addEventListener('DOMContentLoaded', function() {
 
-  
+  // Évite que le navigateur ouvre le fichier si on le lâche à côté
   ['dragover', 'drop'].forEach(ev =>
     window.addEventListener(ev, e => e.preventDefault())
   );
