@@ -6101,6 +6101,17 @@ function filtrerPieces() {
     return;
   }
 
+  
+  const triChoisi = valeur('triPiece') || 'recent';
+  const dateDePiece = function(p) {
+    const t = new Date(p.DateModification || p.DateCreation || 0).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  resultats.sort(triChoisi === 'alpha'
+    ? function(a, b) { return String(a.Nom).localeCompare(String(b.Nom), 'fr', { numeric: true, sensitivity: 'base' }); }
+    : function(a, b) { return dateDePiece(b) - dateDePiece(a); });
+
   liste.innerHTML = resultats.map(cartePiece).join('');
 }
 
@@ -6158,6 +6169,35 @@ function majListeCategoriesPieces() {
   select.value = actuel;
 }
 
+
+
+/** Ajoute le menu « Tri » à côté du filtre de catégories de la page Pièces. */
+function brancherTriPieces() {
+
+  const categorie = document.getElementById('filtreCategoriePiece');
+  if (!categorie || document.getElementById('triPiece')) return;
+
+  const select = document.createElement('select');
+  select.id = 'triPiece';
+  select.className = categorie.className;
+  select.innerHTML =
+    '<option value="recent">Dernières imprimées</option>' +
+    '<option value="alpha">Ordre alphabétique (A → Z)</option>';
+
+  try {
+    const memo = localStorage.getItem('nexa_tri_pieces');
+    if (memo === 'recent' || memo === 'alpha') select.value = memo;
+  } catch (e) {}
+
+  select.addEventListener('change', function() {
+    try { localStorage.setItem('nexa_tri_pieces', select.value); } catch (e) {}
+    filtrerPieces();
+  });
+
+  categorie.insertAdjacentElement('afterend', select);
+}
+
+document.addEventListener('DOMContentLoaded', brancherTriPieces);
 
 
 function majListeActivites() {
