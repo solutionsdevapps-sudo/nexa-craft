@@ -3827,6 +3827,7 @@ function chargerFabrications() {
       fabricationsChargees = true;
       filtrerFabrications();
       if (typeof afficherActiviteRecente === 'function') afficherActiviteRecente();
+      if (typeof afficherActiviteRecente === 'function') afficherActiviteRecente();
     })
 
     .withFailureHandler(function(erreur) {
@@ -7840,6 +7841,8 @@ function validerImpression() {
 
       fermerModalImpression();
       chargerFilaments();
+      chargerFabrications();
+      chargerPieces();
 
       let message =
         'Impression enregistrée ✅\n\n' +
