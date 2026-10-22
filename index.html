@@ -6942,9 +6942,7 @@ document.addEventListener('click', function(e) {
 });
 
 
-</script>
-
-<style>
+</script><style>
 
 .modal-large {
   max-width: 780px;
@@ -7180,6 +7178,13 @@ document.addEventListener('click', function(e) {
       
       <div class="form-grid" style="margin-top:20px;">
 
+      <div class="form-group form-full">
+          <label>Pièce du catalogue (optionnel)</label>
+          <select id="impPiece" onchange="appliquerPieceChoisie()">
+            <option value="">Saisie libre (aucune pièce liée)</option>
+          </select>
+        </div>
+
         <div class="form-group form-full">
           <label>Ce qui a été imprimé *</label>
           <input id="impNom" type="text" placeholder="Ex : Grille porte-dossard">
@@ -7187,10 +7192,7 @@ document.addEventListener('click', function(e) {
 
         <div class="form-group">
           <label>Activité *</label>
-          <select id="impActivite">
-            <option value="KreolSport">KreolSport</option>
-            <option value="Teiknologik">Teiknologik</option>
-          </select>
+          <input id="impActivite" type="text" list="pieActiviteListe" placeholder="Ex : KreolSport, Teiknologik, Perso...">
         </div>
 
         <div class="form-group">
@@ -7299,6 +7301,7 @@ const TEXTE_DEPOT_DEFAUT =
 function ouvrirModalImpression() {
   reinitialiserImpression();
   document.getElementById('modalImpression').classList.add('open');
+  if (!piecesChargees) chargerPieces();
 }
 
 function fermerModalImpression() {
@@ -7314,6 +7317,7 @@ function reinitialiserImpression() {
   document.getElementById('impFichier').value = '';
   document.getElementById('impPlateauBloc').style.display = 'none';
   document.getElementById('impPlateau').innerHTML = '';
+  document.getElementById('impPiece').value = '';
   document.getElementById('impNom').value = '';
   document.getElementById('impQuantite').value = 1;
   document.getElementById('impDuree').value = '';
@@ -7321,15 +7325,17 @@ function reinitialiserImpression() {
   document.getElementById('impStatut').value = 'REUSSIE';
   document.getElementById('impNotes').value = '';
 
-  if (activiteSelectionnee === 'KreolSport' || activiteSelectionnee === 'Teiknologik') {
-    document.getElementById('impActivite').value = activiteSelectionnee;
-  }
+  document.getElementById('impActivite').value =
+   (activiteSelectionnee === 'KreolSport' || activiteSelectionnee === 'Teiknologik')
+    ? activiteSelectionnee : 'KreolSport';
 
   afficherEtatDepot('📄', 'Dépose ici le fichier de Bambu Studio', TEXTE_DEPOT_DEFAUT);
   majSelectImprimantes();
 
   document.getElementById('impLignes').innerHTML = '';
   ajouterLigneImpression();
+
+  majSelectPieces();
 }
 
 
@@ -7516,6 +7522,9 @@ function appliquerPlateau() {
 
   document.getElementById('impLignes').innerHTML = '';
   plateau.filaments.forEach(f => ajouterLigneImpression(f));
+
+  majSelectPieces();
+  tenterLiaisonPieceExistante();
 
   majResumeImpression();
 }
@@ -7739,10 +7748,8 @@ function majResumeImpression() {
     if (bobine) cout += grammes * nombre(bobine.PrixParGramme);
 
     
-    if (!ligne.dataset.couleurDetectee) {
-      ligne.querySelector('.imp-swatch').style.background =
-        couleurSure(bobine ? bobine.CodeCouleur : '');
-    }
+    ligne.querySelector('.imp-swatch').style.background =
+      couleurSure(bobine ? bobine.CodeCouleur : '#cccccc');
 
     const manque = bobine && grammes > nombre(bobine.StockG);
     ligne.classList.toggle('insuffisant', !!manque);
@@ -7800,6 +7807,58 @@ function majSelectImprimantes() {
 
 
 
+ 
+function majSelectPieces() {
+
+  const select = document.getElementById('impPiece');
+  if (!select) return;
+
+  const choix = select.value;
+  const nomActuel = valeur('impNom') || 'cette pièce';
+
+  select.innerHTML =
+    '<option value="">+ Créer une nouvelle pièce : « ' + echapper(nomActuel) + ' »</option>' +
+    piecesCache.map(p =>
+      '<option value="' + echapper(p.ID) + '">' + echapper(p.Nom) +
+      (p.Activite ? ' (' + echapper(p.Activite) + ')' : '') + '</option>'
+    ).join('') +
+    '<option value="__aucune__">Ne pas suivre en stock (test, calibration...)</option>';
+
+  if (choix === '__aucune__' || piecesCache.some(p => String(p.ID) === String(choix))) {
+    select.value = choix;
+  }
+}
+
+
+ 
+function tenterLiaisonPieceExistante() {
+
+  const nom = valeur('impNom').trim().toLowerCase();
+  if (!nom) return;
+
+  const correspond = piecesCache.find(p => String(p.Nom).trim().toLowerCase() === nom);
+  const select = document.getElementById('impPiece');
+
+  if (select && correspond) select.value = correspond.ID;
+}
+
+
+ 
+function appliquerPieceChoisie() {
+
+  const piece = piecesCache.find(p => String(p.ID) === String(valeur('impPiece')));
+  if (!piece) return;
+
+  document.getElementById('impNom').value = piece.Nom;
+
+  if (!valeur('impDuree') && piece.TempsImpressionMin) {
+    document.getElementById('impDuree').value = piece.TempsImpressionMin;
+  }
+
+  majResumeImpression();
+}
+
+
 
 
 
@@ -7811,21 +7870,26 @@ function validerImpression() {
   }));
 
   if (!valeur('impNom')) { alert('Indique ce qui a été imprimé.'); return; }
+  if (!valeur('impActivite')) { alert("Indique l'activité (KreolSport, Teiknologik, ou une autre)."); return; }
   if (!lignes.length) { alert('Ajoute au moins un filament.'); return; }
   if (lignes.some(l => !l.filamentId)) { alert('Choisis une bobine pour chaque filament.'); return; }
   if (lignes.some(l => !(l.poidsG > 0))) { alert('Indique le poids (en g) de chaque filament.'); return; }
 
+  const choixPiece = valeur('impPiece');
+
   const data = {
-    nom:        valeur('impNom'),
-    activite:   valeur('impActivite'),
-    quantite:   Number(valeur('impQuantite')) || 1,
-    dureeMin:   Number(valeur('impDuree')) || 0,
-    date:       valeur('impDate'),
-    statut:     valeur('impStatut'),
-    imprimanteId: valeur('impImprimante'),
-    notes:      valeur('impNotes'),
-    nomFichier: impNomFichier,
-    lignes:     lignes
+    nom:           valeur('impNom'),
+    activite:      valeur('impActivite'),
+    quantite:      Number(valeur('impQuantite')) || 1,
+    dureeMin:      Number(valeur('impDuree')) || 0,
+    date:          valeur('impDate'),
+    statut:        valeur('impStatut'),
+    imprimanteId:  valeur('impImprimante'),
+    pieceId:       (choixPiece && choixPiece !== '__aucune__') ? choixPiece : '',
+    nouvellePiece: choixPiece === '',
+    notes:         valeur('impNotes'),
+    nomFichier:    impNomFichier,
+    lignes:        lignes
   };
 
   const btn = document.getElementById('btnEnregistrerImpression');
@@ -7834,21 +7898,26 @@ function validerImpression() {
 
   google.script.run
 
-    .withSuccessHandler(function(res) {
+     .withSuccessHandler(function(res) {
 
       btn.disabled = false;
       btn.textContent = "Enregistrer l'impression";
 
       fermerModalImpression();
       chargerFilaments();
-      chargerFabrications();
-      chargerPieces();
+      if (piecesChargees) chargerPieces();
+      if (typeof chargerFabrications === 'function') chargerFabrications();
 
       let message =
         'Impression enregistrée ✅\n\n' +
         formatPoids(res.poidsTotalG) + ' de filament retirés du stock\n' +
         'Coût : ' + formatEuro(res.coutTotal) +
         ' (' + formatEuro(res.coutParPiece) + ' par pièce)';
+
+      if (res.pieceMaj) {
+        message += '\n+' + data.quantite + ' pièce(s) ajoutées au stock de ' +
+          res.pieceMaj.reference + ' (stock désormais ' + res.pieceMaj.stockApres + ')';
+      }
 
       if (res.alertes && res.alertes.length) {
         message += '\n\n⚠️ Stock faible : ' + res.alertes.join(', ');
