@@ -7820,7 +7820,9 @@ function majSelectPieces() {
 
   select.innerHTML =
     '<option value="">+ Créer une nouvelle pièce : « ' + echapper(nomActuel) + ' »</option>' +
-    piecesCache.map(p =>
+    piecesCache.slice().sort((a, b) =>
+      String(a.Nom || '').localeCompare(String(b.Nom || ''), 'fr', { numeric: true, sensitivity: 'base' })
+    ).map(p =>
       '<option value="' + echapper(p.ID) + '">' + echapper(p.Nom) +
       (p.Activite ? ' (' + echapper(p.Activite) + ')' : '') + '</option>'
     ).join('') +
