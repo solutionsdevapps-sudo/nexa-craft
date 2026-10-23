@@ -6140,7 +6140,6 @@ function cartePiece(p) {
           <div class="filament-name">${echapper(p.Nom)}</div>
           <div class="filament-sub">${echapper(p.Categorie || 'Sans catégorie')}</div>
         </div>
-        <span class="badge-activite">${echapper(p.Activite)}</span>
       </div>
 
       ${alerte ? '<div style="margin-top:10px;"><span class="badge-alerte">Stock faible</span></div>' : ''}
@@ -6150,7 +6149,10 @@ function cartePiece(p) {
         <span>${details}</span>
       </div>
 
-      <div class="filament-ref">${echapper(p.Reference)}</div>
+      <div class="filament-ref" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span>${echapper(p.Reference)}</span>
+        <span class="badge-activite">${echapper(p.Activite)}</span>
+      </div>
 
     </div>`;
 }
@@ -6172,7 +6174,7 @@ function majListeCategoriesPieces() {
 
 
 
-/** Ajoute le menu « Tri » à côté du filtre de catégories de la page Pièces. */
+ 
 function brancherTriPieces() {
 
   const categorie = document.getElementById('filtreCategoriePiece');
@@ -6208,7 +6210,7 @@ function majListeActivites() {
   remplirListe_('pieActivite', valeurs);
 }
 
-// ============================================================
+
 
 
 
@@ -7853,6 +7855,18 @@ function appliquerPieceChoisie() {
 
   if (!valeur('impDuree') && piece.TempsImpressionMin) {
     document.getElementById('impDuree').value = piece.TempsImpressionMin;
+  }
+
+  
+  const poidsPiece = nombre(piece.PoidsG);
+  if (poidsPiece > 0) {
+    const lignesFil = document.querySelectorAll('#impLignes .imp-ligne');
+    if (lignesFil.length === 1) {
+      const champPoids = lignesFil[0].querySelector('.imp-grammes');
+      if (champPoids && !nombre(champPoids.value)) {
+        champPoids.value = Math.round(poidsPiece * 10) / 10;
+      }
+    }
   }
 
   majResumeImpression();
