@@ -6944,6 +6944,113 @@ document.addEventListener('click', function(e) {
 });
 
 
+
+
+
+
+function installerNavigationMobile() {
+
+  if (document.getElementById('navMobile')) return;
+
+  const ELEMENTS = [
+    { page: 'dashboard',     icone: '▦', libelle: 'Accueil',      action: "naviguer('dashboard')" },
+    { page: 'pieces',        icone: '🧩', libelle: 'Pièces',       action: "allerVersPieces()" },
+    { page: 'fabrication',   icone: '⚙', libelle: 'Fabrication',  action: "naviguer('fabrication')" },
+    { page: 'stocks',        icone: '▣', libelle: 'Stocks',       action: "naviguer('stocks')" },
+    { page: 'produitsfinis', icone: '📦', libelle: 'Produits finis', action: "naviguer('produitsfinis')" },
+    { page: 'produits',      icone: '◆', libelle: 'Fiche produit', action: "naviguer('produits')" },
+    { page: 'ventes',        icone: '€', libelle: 'Ventes',       action: "naviguer('ventes')" },
+    { page: 'catalogue',     icone: '▧', libelle: 'Catalogue',    action: "naviguer('catalogue')" },
+    { page: 'parametres',    icone: '⚙', libelle: 'Paramètres',   action: "naviguer('parametres')" }
+  ];
+
+  const style = document.createElement('style');
+  style.textContent = `
+    #navMobile { display: none; }
+
+    @media (max-width: 850px) {
+      #navMobile {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 900;
+        background: #151929;
+        border-top: 1px solid rgba(255,255,255,.08);
+        padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      #navMobile::-webkit-scrollbar { display: none; }
+
+      #navMobile button {
+        flex: 0 0 auto;
+        min-width: 74px;
+        background: none;
+        border: 0;
+        border-radius: 12px;
+        color: #a6adc4;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 6px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        cursor: pointer;
+      }
+      #navMobile button .nm-icone { font-size: 18px; line-height: 1.2; }
+      #navMobile button.active { background: #625bf6; color: #fff; }
+
+      .main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const nav = document.createElement('nav');
+  nav.id = 'navMobile';
+  nav.innerHTML = ELEMENTS.map(function(e) {
+    return '<button type="button" data-page="' + e.page + '" onclick="' + e.action + '">' +
+             '<span class="nm-icone">' + e.icone + '</span>' + e.libelle +
+           '</button>';
+  }).join('');
+  document.body.appendChild(nav);
+
+  function marquerActif(page) {
+    nav.querySelectorAll('button').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.page === page);
+    });
+    const actif = nav.querySelector('button.active');
+    if (actif && actif.scrollIntoView) {
+      try { actif.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) {}
+    }
+  }
+
+  
+  const naviguerOrigine = window.naviguer;
+  if (typeof naviguerOrigine === 'function') {
+    window.naviguer = function(page) {
+      const r = naviguerOrigine.apply(this, arguments);
+      marquerActif(page);
+      return r;
+    };
+  }
+
+  const piecesOrigine = window.allerVersPieces;
+  if (typeof piecesOrigine === 'function') {
+    window.allerVersPieces = function() {
+      const r = piecesOrigine.apply(this, arguments);
+      marquerActif('pieces');
+      return r;
+    };
+  }
+
+  marquerActif('dashboard');
+}
+
+document.addEventListener('DOMContentLoaded', installerNavigationMobile);
+
+
 </script><style>
 
 .modal-large {
