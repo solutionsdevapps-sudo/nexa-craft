@@ -7055,8 +7055,11 @@ document.addEventListener('DOMContentLoaded', installerNavigationMobile);
 
 
 
+
 var projetsCache = [];
 var projetsCharges = false;
+var projetPhotoNouvelle = '';
+var projetDernierLienAnalyse = '';
 
 const STATUTS_PROJET = ['À voir', 'À imprimer', 'En cours', 'Fait', 'Abandonné'];
 const ACTIVITES_PROJET = ['Perso', 'KreolSport', 'Teiknologik', 'Autre'];
@@ -7109,6 +7112,11 @@ function installerProjets() {
     .prj-lien { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 700; }
     .prj-lien a { color: var(--primary); text-decoration: none; }
     .prj-textarea { width: 100%; min-height: 90px; resize: vertical; }
+    .prj-photo { width: 100%; height: 150px; object-fit: cover; border-radius: 12px; background: var(--surface-soft); }
+    .prj-apercu { display: none; position: relative; margin-top: 10px; }
+    .prj-apercu img { width: 100%; max-height: 190px; object-fit: cover; border-radius: 12px; display: block; }
+    .prj-apercu button { position: absolute; top: 8px; right: 8px; border: 0; border-radius: 20px; padding: 4px 10px; font-size: 11px; font-weight: 700; background: rgba(15,20,35,.75); color: #fff; }
+    .prj-statut-analyse { font-size: 11px; color: var(--muted); margin-top: 6px; min-height: 14px; }
   `;
   document.head.appendChild(style);
 
@@ -7164,13 +7172,20 @@ function installerProjets() {
         <div class="form-grid">
 
           <div class="form-group form-full">
-            <label>Titre *</label>
+            <label>Titre * <span style="font-weight:400;color:var(--muted);">(rempli automatiquement depuis le lien)</span></label>
             <input id="prjTitre" type="text" placeholder="Ex : Support casque mural">
           </div>
 
           <div class="form-group form-full">
             <label>Lien</label>
-            <input id="prjLien" type="url" inputmode="url" placeholder="https://makerworld.com/...">
+            <input id="prjLien" type="url" inputmode="url" placeholder="https://makerworld.com/..."
+              onchange="analyserLienDuProjet()" onpaste="setTimeout(analyserLienDuProjet, 80)">
+            <div id="prjStatutAnalyse" class="prj-statut-analyse"></div>
+            <div id="prjApercu" class="prj-apercu">
+              <img id="prjApercuImg" alt="">
+              <button type="button" onclick="retirerPhotoProjet()">Retirer la photo</button>
+            </div>
+            <input type="hidden" id="prjPhotoId" value="">
           </div>
 
           <div class="form-group">
@@ -7234,7 +7249,7 @@ function installerProjets() {
     else nav.appendChild(b);
   }, 50);
 
-  // Titre de la page + chargement à l'ouverture
+  
   PAGES.projets = { titre: 'Projets', sousTitre: 'Liens et idées de futures impressions' };
 
   const naviguerAvant = window.naviguer;
@@ -7257,7 +7272,7 @@ function installerProjets() {
 }
 
 
-// ---------- Chargement ----------
+
 function chargerProjets() {
 
   google.script.run
@@ -7304,6 +7319,7 @@ function carteProjet(p) {
 
   return `
     <div class="card prj-card" onclick="ouvrirModalProjet('${echapper(p.ID)}')">
+      ${p.PhotoID ? '<img class="prj-photo" loading="lazy" src="' + urlPhoto(p.PhotoID, 500) + '" alt="">' : ''}
       <div class="prj-titre">${echapper(p.Titre)}</div>
       <div class="prj-tags">
         <span class="prj-tag ${classeStatutProjet_(p.Statut)}">${echapper(p.Statut || 'À voir')}</span>
@@ -7368,11 +7384,87 @@ function ouvrirModalProjet(id) {
   document.getElementById('prjNotes').value = p ? (p.Notes || '') : '';
   document.getElementById('btnSupprimerProjet').style.display = p ? '' : 'none';
 
+  projetPhotoNouvelle = '';
+  projetDernierLienAnalyse = p ? (p.Lien || '') : '';
+  document.getElementById('prjStatutAnalyse').textContent = '';
+  afficherPhotoProjet_(p ? (p.PhotoID || '') : '');
+
   document.getElementById('modalProjet').classList.add('open');
 }
 
 
-function fermerModalProjet() {
+function afficherPhotoProjet_(id) {
+  document.getElementById('prjPhotoId').value = id || '';
+  const zone = document.getElementById('prjApercu');
+  if (id) {
+    document.getElementById('prjApercuImg').src = urlPhoto(id, 600);
+    zone.style.display = 'block';
+  } else {
+    document.getElementById('prjApercuImg').removeAttribute('src');
+    zone.style.display = 'none';
+  }
+}
+
+
+function retirerPhotoProjet() {
+  if (projetPhotoNouvelle) {
+    google.script.run.supprimerPhoto(projetPhotoNouvelle);
+    projetPhotoNouvelle = '';
+  }
+  afficherPhotoProjet_('');
+}
+
+
+
+function analyserLienDuProjet() {
+
+  const lien = String(valeur('prjLien') || '').trim();
+  const info = document.getElementById('prjStatutAnalyse');
+
+  if (!lien || lien === projetDernierLienAnalyse) return;
+  if (!/^https?:\/\//i.test(lien)) { info.textContent = ''; return; }
+
+  projetDernierLienAnalyse = lien;
+  info.textContent = '⏳ Analyse du lien...';
+
+  google.script.run
+
+    .withSuccessHandler(function(res) {
+
+      if (String(valeur('prjLien') || '').trim() !== lien) {
+        
+        if (res && res.photoId) google.script.run.supprimerPhoto(res.photoId);
+        return;
+      }
+
+      const titreChamp = document.getElementById('prjTitre');
+      if (res.titre && !String(titreChamp.value || '').trim()) titreChamp.value = res.titre;
+
+      if (res.photoId) {
+        if (projetPhotoNouvelle) google.script.run.supprimerPhoto(projetPhotoNouvelle);
+        projetPhotoNouvelle = res.photoId;
+        afficherPhotoProjet_(res.photoId);
+      }
+
+      if (res.pageLue && res.photoId)       info.textContent = '✓ Titre et photo récupérés';
+      else if (res.pageLue && res.titre)    info.textContent = 'Titre récupéré, photo introuvable';
+      else if (res.titre)                   info.textContent = 'Page illisible : titre déduit du lien (modifie-le si besoin)';
+      else                                  info.textContent = 'Impossible de lire ce lien : saisis le titre à la main';
+    })
+
+    .withFailureHandler(function(erreur) {
+      info.textContent = 'Analyse impossible : ' + (erreur.message || erreur);
+    })
+
+    .analyserLienProjet(lien);
+}
+
+
+function fermerModalProjet(apresEnregistrement) {
+  if (!apresEnregistrement && projetPhotoNouvelle) {
+    google.script.run.supprimerPhoto(projetPhotoNouvelle);
+  }
+  projetPhotoNouvelle = '';
   document.getElementById('modalProjet').classList.remove('open');
 }
 
@@ -7387,10 +7479,11 @@ function enregistrerProjet() {
     lien:     valeur('prjLien'),
     activite: valeur('prjActivite'),
     statut:   valeur('prjStatut'),
-    notes:    valeur('prjNotes')
+    notes:    valeur('prjNotes'),
+    photoId:  document.getElementById('prjPhotoId').value
   };
 
-  if (!String(projet.titre).trim()) { alert('Indique un titre.'); return; }
+  if (!String(projet.titre).trim()) { alert('Indique un titre (ou colle un lien pour le remplir tout seul).'); return; }
 
   if (projet.lien && !/^https?:\/\//i.test(String(projet.lien).trim())) {
     alert('Le lien doit commencer par http:// ou https://');
@@ -7406,7 +7499,7 @@ function enregistrerProjet() {
   const run = google.script.run
     .withSuccessHandler(function() {
       fin();
-      fermerModalProjet();
+      fermerModalProjet(true);
       chargerProjets();
     })
     .withFailureHandler(function(erreur) {
@@ -7429,7 +7522,7 @@ function supprimerProjet() {
 
   google.script.run
     .withSuccessHandler(function() {
-      fermerModalProjet();
+      fermerModalProjet(true);
       chargerProjets();
     })
     .withFailureHandler(function(erreur) { alert(erreur.message || erreur); })
@@ -7444,6 +7537,9 @@ document.addEventListener('DOMContentLoaded', function() {
   installerCorrectifMobile();
   installerProjets();
 });
+
+
+
 
 
 </script><style>
