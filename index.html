@@ -7051,6 +7051,401 @@ function installerNavigationMobile() {
 document.addEventListener('DOMContentLoaded', installerNavigationMobile);
 
 
+
+
+
+
+var projetsCache = [];
+var projetsCharges = false;
+
+const STATUTS_PROJET = ['À voir', 'À imprimer', 'En cours', 'Fait', 'Abandonné'];
+const ACTIVITES_PROJET = ['Perso', 'KreolSport', 'Teiknologik', 'Autre'];
+
+
+
+function installerCorrectifMobile() {
+
+  if (document.getElementById('correctifMobileCss')) return;
+
+  const style = document.createElement('style');
+  style.id = 'correctifMobileCss';
+  style.textContent = `
+    @media (max-width: 850px) {
+      html, body { overflow-x: hidden; max-width: 100%; }
+      .main, .content { min-width: 0; max-width: 100%; }
+      .dashboard-grid { grid-template-columns: minmax(0, 1fr) !important; }
+      .dashboard-grid > * { min-width: 0; }
+      #dashCatalogueApercu { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      #navMobile {
+        width: 100%;
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+
+
+function installerProjets() {
+
+  if (document.getElementById('pageProjets')) return;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .prj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .prj-card { padding: 16px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; min-width: 0; }
+    .prj-titre { font-size: 14px; font-weight: 800; overflow-wrap: anywhere; }
+    .prj-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .prj-tag { padding: 4px 9px; border-radius: 20px; font-size: 10px; font-weight: 700; background: var(--primary-soft); color: var(--primary); white-space: nowrap; }
+    .prj-tag.statut-voir      { background: #eef1f6; color: #5b667d; }
+    .prj-tag.statut-imprimer  { background: #fff4e5; color: var(--warning); }
+    .prj-tag.statut-cours     { background: #e8f1ff; color: #2f6fdd; }
+    .prj-tag.statut-fait      { background: #e7f7f0; color: var(--success); }
+    .prj-tag.statut-abandonne { background: #fdecee; color: var(--danger); }
+    .prj-notes { color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
+                 display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .prj-lien { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 700; }
+    .prj-lien a { color: var(--primary); text-decoration: none; }
+    .prj-textarea { width: 100%; min-height: 90px; resize: vertical; }
+  `;
+  document.head.appendChild(style);
+
+  
+  const content = document.querySelector('.content');
+  if (!content) return;
+
+  const section = document.createElement('section');
+  section.id = 'pageProjets';
+  section.className = 'app-page';
+  section.innerHTML = `
+    <div class="page-heading">
+      <div>
+        <h1>Projets</h1>
+        <p>Garde ici les liens des modèles à imprimer un jour (MakerWorld, Printables...).</p>
+      </div>
+      <button class="primary-btn" onclick="ouvrirModalProjet()">+ Nouveau projet</button>
+    </div>
+
+    <div class="card stock-toolbar">
+      <div class="stock-search">
+        <span>🔍</span>
+        <input id="rechercheProjet" type="text" placeholder="Rechercher un projet..." oninput="filtrerProjets()">
+      </div>
+      <select id="filtreStatutProjet" class="stock-filter" onchange="filtrerProjets()">
+        <option value="">Tous les statuts</option>
+        ${STATUTS_PROJET.map(s => '<option value="' + s + '">' + s + '</option>').join('')}
+      </select>
+    </div>
+
+    <div id="listeProjets" class="prj-grid">
+      <div class="card loading-state" style="grid-column:1/-1;">Chargement des projets...</div>
+    </div>
+  `;
+  content.appendChild(section);
+
+  
+  const modal = document.createElement('div');
+  modal.id = 'modalProjet';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modalProjetTitre">Nouveau projet</div>
+          <div class="modal-subtitle">Colle le lien du modèle et note ce que tu veux en faire</div>
+        </div>
+        <button class="modal-close" onclick="fermerModalProjet()">×</button>
+      </div>
+
+      <div class="modal-body">
+        <input type="hidden" id="prjId" value="">
+        <div class="form-grid">
+
+          <div class="form-group form-full">
+            <label>Titre *</label>
+            <input id="prjTitre" type="text" placeholder="Ex : Support casque mural">
+          </div>
+
+          <div class="form-group form-full">
+            <label>Lien</label>
+            <input id="prjLien" type="url" inputmode="url" placeholder="https://makerworld.com/...">
+          </div>
+
+          <div class="form-group">
+            <label>Activité</label>
+            <select id="prjActivite">
+              ${ACTIVITES_PROJET.map(a => '<option value="' + a + '">' + a + '</option>').join('')}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Statut</label>
+            <select id="prjStatut">
+              ${STATUTS_PROJET.map(s => '<option value="' + s + '">' + s + '</option>').join('')}
+            </select>
+          </div>
+
+          <div class="form-group form-full">
+            <label>Notes</label>
+            <textarea id="prjNotes" class="prj-textarea" placeholder="Filament conseillé, réglages, idée d'utilisation..."></textarea>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnSupprimerProjet" class="secondary-btn" style="margin-right:auto; display:none;" onclick="supprimerProjet()">Supprimer</button>
+        <button class="secondary-btn" onclick="fermerModalProjet()">Annuler</button>
+        <button id="btnEnregistrerProjet" class="primary-btn" onclick="enregistrerProjet()">Enregistrer</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  // Menu de gauche (ordinateur)
+  const labels = document.querySelectorAll('.sidebar .menu-label');
+  let avant = null;
+  labels.forEach(l => { if (l.textContent.trim().toUpperCase().indexOf('PRÉSENTATION') === 0) avant = l; });
+
+  const bouton = document.createElement('button');
+  bouton.className = 'nav-item';
+  bouton.dataset.page = 'projets';
+  bouton.setAttribute('onclick', "naviguer('projets')");
+  bouton.innerHTML = '<span class="nav-icon">💡</span> Projets';
+
+  if (avant) avant.parentNode.insertBefore(bouton, avant);
+  else if (document.querySelector('.sidebar')) document.querySelector('.sidebar').appendChild(bouton);
+
+  // Barre du bas (téléphone) : après la création de la barre
+  setTimeout(function() {
+    const nav = document.getElementById('navMobile');
+    if (!nav || nav.querySelector('[data-page="projets"]')) return;
+
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.page = 'projets';
+    b.setAttribute('onclick', "naviguer('projets')");
+    b.innerHTML = '<span class="nm-icone">💡</span>Projets';
+
+    const ventes = nav.querySelector('[data-page="ventes"]');
+    if (ventes && ventes.nextSibling) nav.insertBefore(b, ventes.nextSibling);
+    else nav.appendChild(b);
+  }, 50);
+
+  // Titre de la page + chargement à l'ouverture
+  PAGES.projets = { titre: 'Projets', sousTitre: 'Liens et idées de futures impressions' };
+
+  const naviguerAvant = window.naviguer;
+  window.naviguer = function(page) {
+    const r = naviguerAvant.apply(this, arguments);
+    if (page === 'projets') {
+      if (!projetsCharges) chargerProjets(); else filtrerProjets();
+    }
+    return r;
+  };
+
+  const changerActiviteAvant = window.changerActivite;
+  if (typeof changerActiviteAvant === 'function') {
+    window.changerActivite = function() {
+      const r = changerActiviteAvant.apply(this, arguments);
+      if (projetsCharges) filtrerProjets();
+      return r;
+    };
+  }
+}
+
+
+// ---------- Chargement ----------
+function chargerProjets() {
+
+  google.script.run
+
+    .withSuccessHandler(function(projets) {
+      projetsCache = (projets || []).filter(p =>
+        p.Actif !== false && String(p.Actif).toUpperCase() !== 'FALSE'
+      );
+      projetsCharges = true;
+      filtrerProjets();
+    })
+
+    .withFailureHandler(function(erreur) {
+      const liste = document.getElementById('listeProjets');
+      if (liste) {
+        liste.innerHTML = '<div class="card loading-state" style="grid-column:1/-1;">Impossible de charger les projets : ' +
+          echapper(erreur.message || erreur) + '</div>';
+      }
+    })
+
+    .getProjets();
+}
+
+
+function classeStatutProjet_(statut) {
+  const s = String(statut || '');
+  if (s === 'À voir')      return 'statut-voir';
+  if (s === 'À imprimer')  return 'statut-imprimer';
+  if (s === 'En cours')    return 'statut-cours';
+  if (s === 'Fait')        return 'statut-fait';
+  if (s === 'Abandonné')   return 'statut-abandonne';
+  return '';
+}
+
+
+function lienSur_(lien) {
+  return /^https?:\/\//i.test(String(lien || '')) ? String(lien) : '';
+}
+
+
+function carteProjet(p) {
+
+  const lien = lienSur_(p.Lien);
+
+  return `
+    <div class="card prj-card" onclick="ouvrirModalProjet('${echapper(p.ID)}')">
+      <div class="prj-titre">${echapper(p.Titre)}</div>
+      <div class="prj-tags">
+        <span class="prj-tag ${classeStatutProjet_(p.Statut)}">${echapper(p.Statut || 'À voir')}</span>
+        ${p.Source ? '<span class="prj-tag">' + echapper(p.Source) + '</span>' : ''}
+        ${p.Activite ? '<span class="prj-tag">' + echapper(p.Activite) + '</span>' : ''}
+      </div>
+      ${p.Notes ? '<div class="prj-notes">' + echapper(p.Notes) + '</div>' : ''}
+      ${lien ? '<div class="prj-lien"><a href="' + echapper(lien) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Ouvrir le lien ↗</a></div>' : ''}
+    </div>`;
+}
+
+
+function filtrerProjets() {
+
+  const liste = document.getElementById('listeProjets');
+  if (!liste) return;
+
+  const recherche = String(valeur('rechercheProjet') || '').trim().toLowerCase();
+  const statut = valeur('filtreStatutProjet');
+
+  let resultats = projetsCache.filter(p => {
+
+    if (typeof activiteSelectionnee !== 'undefined' &&
+        activiteSelectionnee && activiteSelectionnee !== 'Toutes' &&
+        p.Activite !== activiteSelectionnee) return false;
+
+    if (statut && p.Statut !== statut) return false;
+
+    if (recherche) {
+      const texte = [p.Titre, p.Notes, p.Source, p.Lien].join(' ').toLowerCase();
+      if (texte.indexOf(recherche) === -1) return false;
+    }
+
+    return true;
+  });
+
+  // Les plus récents en premier
+  resultats.sort((a, b) => String(b.DateCreation || '').localeCompare(String(a.DateCreation || '')));
+
+  if (!resultats.length) {
+    liste.innerHTML = '<div class="card loading-state" style="grid-column:1/-1;">' +
+      (projetsCache.length ? 'Aucun projet ne correspond.' : 'Aucun projet pour le moment. Clique sur « + Nouveau projet » pour coller un premier lien.') +
+      '</div>';
+    return;
+  }
+
+  liste.innerHTML = resultats.map(carteProjet).join('');
+}
+
+
+// ---------- Fenêtre ----------
+function ouvrirModalProjet(id) {
+
+  const p = id ? projetsCache.find(x => String(x.ID) === String(id)) : null;
+
+  document.getElementById('modalProjetTitre').textContent = p ? 'Modifier le projet' : 'Nouveau projet';
+  document.getElementById('prjId').value = p ? p.ID : '';
+  document.getElementById('prjTitre').value = p ? (p.Titre || '') : '';
+  document.getElementById('prjLien').value = p ? (p.Lien || '') : '';
+  document.getElementById('prjActivite').value = p && p.Activite ? p.Activite : 'Perso';
+  document.getElementById('prjStatut').value = p && p.Statut ? p.Statut : 'À voir';
+  document.getElementById('prjNotes').value = p ? (p.Notes || '') : '';
+  document.getElementById('btnSupprimerProjet').style.display = p ? '' : 'none';
+
+  document.getElementById('modalProjet').classList.add('open');
+}
+
+
+function fermerModalProjet() {
+  document.getElementById('modalProjet').classList.remove('open');
+}
+
+
+function enregistrerProjet() {
+
+  const id = document.getElementById('prjId').value;
+
+  const projet = {
+    id:       id,
+    titre:    valeur('prjTitre'),
+    lien:     valeur('prjLien'),
+    activite: valeur('prjActivite'),
+    statut:   valeur('prjStatut'),
+    notes:    valeur('prjNotes')
+  };
+
+  if (!String(projet.titre).trim()) { alert('Indique un titre.'); return; }
+
+  if (projet.lien && !/^https?:\/\//i.test(String(projet.lien).trim())) {
+    alert('Le lien doit commencer par http:// ou https://');
+    return;
+  }
+
+  const btn = document.getElementById('btnEnregistrerProjet');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement...';
+
+  const fin = function() { btn.disabled = false; btn.textContent = 'Enregistrer'; };
+
+  const run = google.script.run
+    .withSuccessHandler(function() {
+      fin();
+      fermerModalProjet();
+      chargerProjets();
+    })
+    .withFailureHandler(function(erreur) {
+      fin();
+      alert(erreur.message || erreur);
+    });
+
+  if (id) run.modifierProjet(projet); else run.ajouterProjet(projet);
+}
+
+
+function supprimerProjet() {
+
+  const id = document.getElementById('prjId').value;
+  if (!id) return;
+  if (!confirm('Supprimer ce projet ?')) return;
+
+  const p = projetsCache.find(x => String(x.ID) === String(id));
+  if (!p) return;
+
+  google.script.run
+    .withSuccessHandler(function() {
+      fermerModalProjet();
+      chargerProjets();
+    })
+    .withFailureHandler(function(erreur) { alert(erreur.message || erreur); })
+    .modifierProjet({
+      id: id, titre: p.Titre, lien: p.Lien, activite: p.Activite,
+      statut: p.Statut, notes: p.Notes, actif: false
+    });
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+  installerCorrectifMobile();
+  installerProjets();
+});
+
+
 </script><style>
 
 .modal-large {
