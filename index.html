@@ -7719,6 +7719,120 @@ function importerDepuisSignetProjet() {
 
 
 
+
+
+
+function actualiserDonnees() {
+
+  const chargeurs = [
+    'chargerFilaments', 'chargerPieces', 'chargerComposants', 'chargerProduits',
+    'chargerFabrications', 'chargerVentes', 'chargerAssemblages', 'chargerProjets'
+  ];
+
+  chargeurs.forEach(function(nom) {
+    if (typeof window[nom] === 'function') {
+      try { window[nom](); } catch (e) { console.error(nom, e); }
+    }
+  });
+}
+
+
+function rechargerApplication() {
+
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(function(r) { if (r) r.update(); });
+    }
+  } catch (e) {}
+
+  location.reload();
+}
+
+
+function installerBoutonActualiser() {
+
+  if (document.getElementById('btnActualiser')) return;
+
+  const topbar = document.querySelector('.topbar');
+  const commutateur = document.querySelector('.topbar .activity-switch');
+  if (!topbar) return;
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+    #btnActualiser {
+      width: 38px; height: 38px; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: white; color: var(--primary);
+      font-size: 19px; line-height: 1; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-user-select: none; user-select: none;
+    }
+    #btnActualiser:active { background: var(--primary-soft); }
+    #btnActualiser.tourne span { animation: spin .8s linear infinite; }
+    #btnActualiser span { display: inline-block; }
+
+    @media (max-width: 600px) {
+      .topbar { gap: 8px; }
+      .topbar .page-subtitle { display: none; }
+      .topbar .page-title { font-size: 17px; line-height: 1.2; }
+      #btnActualiser { width: 34px; height: 34px; font-size: 17px; border-radius: 10px; }
+      .topbar-actions { gap: 6px; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const bouton = document.createElement('button');
+  bouton.id = 'btnActualiser';
+  bouton.type = 'button';
+  bouton.title = "Actualiser les données (appui long : recharger toute l'application)";
+  bouton.setAttribute('aria-label', 'Actualiser');
+  bouton.innerHTML = '<span>↻</span>';
+
+  const zone = document.createElement('div');
+  zone.className = 'topbar-actions';
+
+  if (commutateur) {
+    topbar.insertBefore(zone, commutateur);
+    zone.appendChild(bouton);
+    zone.appendChild(commutateur);
+  } else {
+    topbar.appendChild(zone);
+    zone.appendChild(bouton);
+  }
+
+  let minuterie = null;
+  let appuiLong = false;
+
+  bouton.addEventListener('pointerdown', function() {
+    appuiLong = false;
+    minuterie = setTimeout(function() {
+      appuiLong = true;
+      rechargerApplication();
+    }, 800);
+  });
+
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(function(evenement) {
+    bouton.addEventListener(evenement, function() { clearTimeout(minuterie); });
+  });
+
+  bouton.addEventListener('click', function(e) {
+
+    if (appuiLong) { e.preventDefault(); return; }
+
+    if (e.altKey || e.shiftKey) { rechargerApplication(); return; }
+
+    bouton.classList.add('tourne');
+    actualiserDonnees();
+    setTimeout(function() { bouton.classList.remove('tourne'); }, 1500);
+  });
+
+  bouton.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+}
+
+document.addEventListener('DOMContentLoaded', installerBoutonActualiser);
+
+
 </script><style>
 
 .modal-large {
